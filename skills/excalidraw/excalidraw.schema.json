@@ -1,0 +1,240 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/excalidraw-clipboard.schema.json",
+  "title": "Excalidraw document (clipboard / file export)",
+  "description": "Derived from resources/*.excalidraw (all are 'excalidraw/clipboard' payloads). Observed element types: rectangle, text, line, arrow. reference.excalidraw (+ reference.png) additionally demonstrates all rectangle style options: strokeStyle (solid/dashed/dotted), text sizes S/M/L/XL, fillStyle (solid/hachure/cross-hatch), roughness 0/1/2, text alignment (3 horizontal x 3 vertical), and rounded corners. 'ellipse' and 'diamond' share the rectangle shape in Excalidraw and are included for completeness (not observed in samples). Plain '.excalidraw' files saved from the app use type 'excalidraw' and additionally carry version/source/appState, which are allowed but optional.",
+  "type": "object",
+  "required": ["type", "elements"],
+  "properties": {
+    "type": { "enum": ["excalidraw/clipboard", "excalidraw"] },
+    "version": { "type": "integer" },
+    "source": { "type": "string" },
+    "elements": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/element" }
+    },
+    "appState": { "type": "object" },
+    "files": {
+      "description": "Binary files (images) keyed by file id. Always empty in the samples.",
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false,
+
+  "$defs": {
+    "id": {
+      "description": "Opaque element/group id (nanoid-like, may contain '-' and '_').",
+      "type": "string",
+      "minLength": 1
+    },
+    "color": {
+      "description": "Hex colour or 'transparent'. Excalidraw palette (stroke -> matching light background): #1e1e1e black (default stroke) -> transparent (default background); #e03131 red -> #ffc9c9; #2f9e44 green -> #b2f2bb; #1971c2 blue -> #a5d8ff; #f08c00 orange -> #ffec99. Also observed: #ffffff. Convention: a bound text label uses the same strokeColor as its container (e.g. red shape -> red label) and always has backgroundColor 'transparent'.",
+      "type": "string",
+      "pattern": "^(transparent|#[0-9a-fA-F]{3,8})$"
+    },
+    "point": {
+      "description": "[x, y] relative to the element's x/y.",
+      "type": "array",
+      "prefixItems": [{ "type": "number" }, { "type": "number" }],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "boundElementRef": {
+      "description": "Back-reference from a container/shape to a bound text label or arrow.",
+      "type": "object",
+      "required": ["id", "type"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "type": { "enum": ["text", "arrow"] }
+      },
+      "additionalProperties": false
+    },
+    "roundness": {
+      "description": "null = sharp corners (default for rectangles; also always null on text). {\"type\": 3} = rounded corners ('round edges' in the UI) - stored without 'value' on a rectangle (adaptive radius). type 2 = curved/proportional (observed on arrows), type 1 = legacy.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "enum": [1, 2, 3] },
+            "value": { "type": "number" }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "binding": {
+      "description": "Arrow endpoint attached to another element. 'orbit' = glued to the outline; 'inside' = anchored inside the target; 'skip' = unbound-ish.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["elementId", "mode", "fixedPoint"],
+          "properties": {
+            "elementId": { "$ref": "#/$defs/id" },
+            "mode": { "enum": ["orbit", "inside", "skip"] },
+            "fixedPoint": {
+              "description": "Normalised [0..1] position on the target's bounding box (x, y).",
+              "type": "array",
+              "prefixItems": [{ "type": "number" }, { "type": "number" }],
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "focus": { "type": "number" },
+            "gap": { "type": "number" }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "arrowhead": {
+      "oneOf": [
+        { "type": "null" },
+        { "enum": ["arrow", "bar", "dot", "circle", "circle_outline", "triangle", "triangle_outline", "diamond", "diamond_outline", "crowfoot_one", "crowfoot_many", "crowfoot_one_or_many", "cardinality_one", "cardinality_many", "cardinality_one_or_many", "cardinality_exactly_one", "cardinality_zero_or_one", "cardinality_zero_or_many"] }
+      ]
+    },
+
+    "baseElement": {
+      "type": "object",
+      "required": [
+        "id", "type", "x", "y", "width", "height", "angle",
+        "strokeColor", "backgroundColor", "fillStyle", "strokeWidth", "strokeStyle",
+        "roughness", "opacity", "groupIds", "frameId", "index", "roundness",
+        "seed", "version", "versionNonce", "isDeleted", "boundElements",
+        "updated", "link", "locked"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "type": { "enum": ["rectangle", "ellipse", "diamond", "text", "line", "arrow"] },
+        "x": { "type": "number", "description": "Canvas x of the top-left of the (unrotated) bounding box." },
+        "y": { "type": "number" },
+        "width": { "type": "number", "minimum": 0, "description": "Reference rectangles are 133.953125 wide." },
+        "height": { "type": "number", "minimum": 0, "description": "Reference rectangles are 115.0078125 high. Text height is derived: number of lines * fontSize * lineHeight (16->20, 20->25, 28->35, 36->45 for one line; 'bottom\nright' at 20 -> 50)." },
+        "angle": { "type": "number", "description": "Rotation in radians (observed 0, π/2, 3π/2)." },
+        "strokeColor": { "$ref": "#/$defs/color" },
+        "backgroundColor": { "$ref": "#/$defs/color" },
+        "fillStyle": {
+          "enum": ["solid", "hachure", "cross-hatch", "zigzag"],
+          "description": "UI mapping: 'solid' = Solid (default; also required for transparent backgrounds and for text), 'hachure' = Hatch / 'striped' (diagonal single lines), 'cross-hatch' = Cross-hatch / 'caro' (crossing diagonal lines), 'zigzag' = Zigzag. Only visible when backgroundColor is not 'transparent'. Hatch fills are drawn in backgroundColor; the outline in strokeColor. Observed pairs: hachure + #f08c00/#ffec99, cross-hatch + #1971c2/#a5d8ff, solid + #e03131/#ffc9c9."
+        },
+        "strokeWidth": { "type": "number", "description": "UI presets: 1 = thin, 2 = bold (app default), 4 = extra bold. Reference uses 1 throughout." },
+        "strokeStyle": { "enum": ["solid", "dashed", "dotted"], "description": "Outline style: 'solid' (default), 'dashed', 'dotted'. Applies to the shape outline; text labels stay 'solid'." },
+        "roughness": { "type": "integer", "minimum": 0, "maximum": 2, "description": "Sloppiness / edge style: 0 = Architect (straight, clean lines), 1 = Artist ('hand drawn'), 2 = Cartoonist ('sloppy', most wobble and double strokes). Applies to the shape outline and fill; a bound text label keeps roughness 0." },
+        "opacity": { "type": "number", "minimum": 0, "maximum": 100, "description": "100 = fully opaque (all samples)." },
+        "groupIds": {
+          "description": "Ids of groups the element belongs to (innermost first).",
+          "type": "array",
+          "items": { "$ref": "#/$defs/id" }
+        },
+        "frameId": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/id" }] },
+        "index": { "type": "string", "description": "Fractional index (z-order), e.g. 'a4K', 'b21'." },
+        "roundness": { "$ref": "#/$defs/roundness" },
+        "seed": { "type": "integer" },
+        "version": { "type": "integer", "minimum": 1 },
+        "versionNonce": { "type": "integer" },
+        "isDeleted": { "type": "boolean" },
+        "boundElements": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "array", "items": { "$ref": "#/$defs/boundElementRef" } }
+          ]
+        },
+        "updated": { "type": "integer", "description": "Unix epoch milliseconds." },
+        "link": { "type": ["string", "null"] },
+        "locked": { "type": "boolean" },
+        "customData": { "type": "object" }
+      }
+    },
+
+    "shapeElement": {
+      "description": "rectangle / ellipse / diamond. Text labels are NOT stored inline: a separate text element points to the shape via containerId and the shape lists it in boundElements.",
+      "allOf": [{ "$ref": "#/$defs/baseElement" }],
+      "properties": {
+        "type": { "enum": ["rectangle", "ellipse", "diamond"] }
+      },
+      "unevaluatedProperties": false
+    },
+
+    "textElement": {
+      "allOf": [{ "$ref": "#/$defs/baseElement" }],
+      "required": [
+        "text", "originalText", "fontSize", "fontFamily", "textAlign",
+        "verticalAlign", "containerId", "autoResize", "lineHeight"
+      ],
+      "properties": {
+        "type": { "const": "text" },
+        "text": { "type": "string", "description": "Rendered text (with soft-wrap newlines when bound to a container), e.g. 'bottom\nright'." },
+        "originalText": { "type": "string", "description": "Text before container wrapping, e.g. 'bottom right'." },
+        "fontSize": { "type": "number", "exclusiveMinimum": 0, "description": "UI size presets: S = 16, M = 20 (default), L = 28, XL = 36. Other values (e.g. 7.3) occur when text is scaled." },
+        "fontFamily": {
+          "type": "integer",
+          "description": "5 = Excalifont (all samples, including the reference). 1 Virgil, 2 Helvetica, 3 Cascadia, 6 Nunito, 7 Lilita One, 8 Comic Shanns, 9 Liberation Sans.",
+          "enum": [1, 2, 3, 5, 6, 7, 8, 9]
+        },
+        "textAlign": { "enum": ["left", "center", "right"], "description": "Horizontal alignment inside the container. Text x for a container at cx/cw: left -> cx + 5; center -> cx + (cw - textWidth)/2; right -> cx + cw - textWidth - 5. (5 px padding.)" },
+        "verticalAlign": { "enum": ["top", "middle", "bottom"], "description": "Vertical alignment inside the container. Text y for a container at cy/ch: top -> cy + 5; middle -> cy + (ch - textHeight)/2; bottom -> cy + ch - textHeight - 5. (5 px padding.) Reference uses 'middle' for centered/left/right labels and top/bottom only for the top-left / bottom-right examples." },
+        "containerId": {
+          "description": "Id of the shape this text labels, or null for free-standing text.",
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/id" }]
+        },
+        "autoResize": { "type": "boolean", "description": "true (all samples): text box width follows content. Text width is not specified by the format; it is measured from the font (e.g. Excalifont 20px: 'm' ~13.3, 'solid' ~44.3, 'hand drawn' ~108.9)." },
+        "lineHeight": { "type": "number", "description": "Unitless multiplier; 1.25 in all samples (Excalifont)." }
+      },
+      "unevaluatedProperties": false
+    },
+
+    "linearElement": {
+      "allOf": [{ "$ref": "#/$defs/baseElement" }],
+      "required": ["points", "startBinding", "endBinding", "startArrowhead", "endArrowhead"],
+      "properties": {
+        "points": {
+          "description": "Polyline vertices relative to (x, y); first is always [0,0].",
+          "type": "array",
+          "items": { "$ref": "#/$defs/point" },
+          "minItems": 2
+        },
+        "startBinding": { "$ref": "#/$defs/binding" },
+        "endBinding": { "$ref": "#/$defs/binding" },
+        "startArrowhead": { "$ref": "#/$defs/arrowhead" },
+        "endArrowhead": { "$ref": "#/$defs/arrowhead" },
+        "lastCommittedPoint": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/point" }] }
+      }
+    },
+
+    "lineElement": {
+      "description": "Plain line or (polygon=true) closed filled polyline. Samples: bindings and arrowheads always null.",
+      "allOf": [{ "$ref": "#/$defs/linearElement" }],
+      "required": ["polygon"],
+      "properties": {
+        "type": { "const": "line" },
+        "polygon": { "type": "boolean", "description": "true = closed shape; last point equals first." }
+      },
+      "unevaluatedProperties": false
+    },
+
+    "arrowElement": {
+      "allOf": [{ "$ref": "#/$defs/linearElement" }],
+      "required": ["elbowed"],
+      "properties": {
+        "type": { "const": "arrow" },
+        "elbowed": { "type": "boolean", "description": "true = right-angle routed arrow." },
+        "moveMidPointsWithElement": { "type": "boolean" },
+        "fixedSegments": { "oneOf": [{ "type": "null" }, { "type": "array" }] }
+      },
+      "unevaluatedProperties": false
+    },
+
+    "element": {
+      "type": "object",
+      "required": ["type"],
+      "oneOf": [
+        { "properties": { "type": { "enum": ["rectangle", "ellipse", "diamond"] } }, "$ref": "#/$defs/shapeElement" },
+        { "properties": { "type": { "const": "text" } }, "$ref": "#/$defs/textElement" },
+        { "properties": { "type": { "const": "line" } }, "$ref": "#/$defs/lineElement" },
+        { "properties": { "type": { "const": "arrow" } }, "$ref": "#/$defs/arrowElement" }
+      ]
+    }
+  }
+}
